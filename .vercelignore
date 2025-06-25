@@ -22,4 +22,16 @@ env/
 test_*
 *_test.py
 örnek_*
-example* 
+example*
+
+# Büyük Python dosyaları (Landing page için gerekli değil)
+postman_web_app.py
+postman_collection_editor.py
+har_to_postman.py
+har_converter_örnek.py
+postman_cli.py
+postman_gui.py
+postman_gui_tkinter.py
+streamlit_app.py
+collection*.json
+*.backup_* 
