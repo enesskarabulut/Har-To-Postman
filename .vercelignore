@@ -1,0 +1,25 @@
+# Vercel deployment'tan hariç tutulacak dosyalar
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+.pytest_cache/
+.env
+.venv/
+venv/
+ENV/
+env/
+.git/
+.gitignore
+*.md
+*.txt
+!requirements.txt
+*.har
+*.json.backup_*
+test_*
+*_test.py
+örnek_*
+example* 
