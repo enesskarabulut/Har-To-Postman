@@ -76,40 +76,28 @@ def main():
         return
     
     # Tab'lar (HAR Converter sidebar'a taşındı)
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🔧 Header İşlemleri", 
-        "🌐 URL İşlemleri", 
         "📝 Metin Değiştirme", 
         "🗑️ Script Temizleme",
         "⚙️ Environment Variables",
-        "📋 Endpoint'ler",
-        "🔍 Script Listesi",
-        "🗑️ Endpoint Silme"
+        "📋 Endpoint'ler"
     ])
     
     with tab1:
         header_operations()
-    
-    with tab2:
-        url_operations()
         
-    with tab3:
+    with tab2:
         text_operations()
         
-    with tab4:
+    with tab3:
         script_operations()
         
-    with tab5:
+    with tab4:
         environment_operations()
         
-    with tab6:
+    with tab5:
         endpoint_list()
-        
-    with tab7:
-        script_list()
-        
-    with tab8:
-        endpoint_removal()
 
 def load_collection(uploaded_file):
     """Collection dosyasını yükle"""
@@ -224,38 +212,6 @@ def header_operations():
             else:
                 st.warning("⚠️ Header adı boş olamaz!")
 
-def url_operations():
-    """URL işlemleri sekmesi"""
-    st.header("🌐 URL İşlemleri")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        old_url = st.text_input(
-            "Eski Base URL",
-            value="http://localhost:3000",
-            help="Değiştirilecek URL"
-        )
-    
-    with col2:
-        new_url = st.text_input(
-            "Yeni Base URL",
-            value="https://api.example.com",
-            help="Yeni URL"
-        )
-    
-    if st.button("🔄 URL'leri Güncelle", type="primary"):
-        if old_url and new_url:
-            try:
-                count = st.session_state.editor.update_base_url(old_url, new_url)
-                st.success(f"✅ {count} request'te URL güncellendi!")
-                # Endpoint'leri yenile
-                st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
-            except Exception as e:
-                st.error(f"❌ Hata: {e}")
-        else:
-            st.warning("⚠️ URL'ler boş olamaz!")
-
 def text_operations():
     """Metin değiştirme sekmesi"""
     st.header("📝 Metin Değiştirme")
@@ -333,198 +289,593 @@ def environment_operations():
             st.warning("⚠️ Variable adı ve değeri boş olamaz!")
 
 def endpoint_list():
-    """Endpoint listesi sekmesi"""
+    """Endpoint listesi ve detay düzenleme sekmesi"""
     st.header("📋 Endpoint'ler")
+    
+    # Görünüm modu seçimi
+    view_mode = st.radio(
+        "Görünüm Modu:",
+        ["📋 Liste Görünümü", "🔍 Detay Görünümü"],
+        horizontal=True
+    )
     
     if st.button("🔄 Listeyi Yenile"):
         if st.session_state.get('editor'):
             st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
             st.rerun()
     
-    if st.session_state.get('endpoints', []):
-        # DataFrame oluştur
-        import pandas as pd
-        df = pd.DataFrame(st.session_state.endpoints)
-        
-        # Filtreleme
-        col1, col2 = st.columns(2)
-        with col1:
-            method_filter = st.selectbox(
-                "Method Filtresi",
-                options=["Tümü"] + sorted(df['method'].unique().tolist())
-            )
-        
-        with col2:
-            search_term = st.text_input("Endpoint Ara", placeholder="Endpoint adı veya URL'de ara")
-        
-        # Filtreleme uygula
-        filtered_df = df.copy()
-        
-        if method_filter != "Tümü":
-            filtered_df = filtered_df[filtered_df['method'] == method_filter]
-        
-        if search_term:
-            mask = filtered_df['name'].str.contains(search_term, case=False, na=False) | \
-                   filtered_df['url'].str.contains(search_term, case=False, na=False)
-            filtered_df = filtered_df[mask]
-        
-        st.markdown(f"**Toplam: {len(filtered_df)} endpoint**")
-        
-        # Tablo göster
+    if not st.session_state.get('endpoints', []):
+        st.info("Endpoint bulunamadı")
+        return
+    
+    # DataFrame oluştur
+    import pandas as pd
+    df = pd.DataFrame(st.session_state.endpoints)
+    
+    # Filtreleme
+    col1, col2 = st.columns(2)
+    with col1:
+        method_filter = st.selectbox(
+            "Method Filtresi",
+            options=["Tümü"] + sorted(df['method'].unique().tolist())
+        )
+    
+    with col2:
+        search_term = st.text_input("Endpoint Ara", placeholder="Endpoint adı veya URL'de ara")
+    
+    # Filtreleme uygula
+    filtered_df = df.copy()
+    
+    if method_filter != "Tümü":
+        filtered_df = filtered_df[filtered_df['method'] == method_filter]
+    
+    if search_term:
+        mask = filtered_df['name'].str.contains(search_term, case=False, na=False) | \
+               filtered_df['url'].str.contains(search_term, case=False, na=False)
+        filtered_df = filtered_df[mask]
+    
+    st.markdown(f"**Toplam: {len(filtered_df)} endpoint**")
+    
+    if view_mode == "📋 Liste Görünümü":
+        # Basit tablo görünümü
         st.dataframe(
             filtered_df,
             use_container_width=True,
             hide_index=True
         )
     else:
-        st.info("Endpoint bulunamadı")
+        # Detaylı görünüm
+        endpoint_detail_view(filtered_df)
 
-def endpoint_removal():
-    """Endpoint silme sekmesi"""
-    st.header("🗑️ Endpoint Silme İşlemleri")
-    st.markdown("Belirli endpoint'leri collection'dan kaldırın")
+def endpoint_detail_view(filtered_df):
+    """Endpoint detay görünümü ve düzenleme"""
     
-    st.warning("⚠️ Bu işlem geri alınamaz! Devam etmeden önce yedek oluşturun.")
+    if filtered_df.empty:
+        st.info("Filtreleme kriterlerine uygun endpoint bulunamadı")
+        return
     
-    # Silme yöntemi seçimi
-    method = st.selectbox(
-        "Silme Yöntemi",
-        ["İsme Göre Sil", "HTTP Method'una Göre Sil", "URL Pattern'ına Göre Sil", "Birden Fazla Endpoint Sil"]
+    # Endpoint seçimi
+    endpoint_names = [f"{row['method']} - {row['name']}" for _, row in filtered_df.iterrows()]
+    selected_endpoint_display = st.selectbox(
+        "Düzenlemek İstediğiniz Endpoint'i Seçin:",
+        options=["Seçin..."] + endpoint_names
     )
     
-    if method == "İsme Göre Sil":
-        st.subheader("📝 İsme Göre Endpoint Silme")
-        
-        # Mevcut endpoint'leri dropdown'da göster
-        if st.session_state.get('endpoints', []):
-            endpoint_names = [ep['name'] for ep in st.session_state.endpoints]
-            selected_endpoint = st.selectbox(
-                "Silinecek Endpoint'i Seçin",
-                options=["Seçin..."] + endpoint_names
-            )
-            
-            # Manual giriş de ekleyelim
-            manual_name = st.text_input(
-                "Veya Endpoint İsmini Manuel Girin",
-                help="Yukarıdaki listede yoksa manuel girebilirsiniz"
-            )
-            
-            endpoint_to_remove = manual_name if manual_name else (selected_endpoint if selected_endpoint != "Seçin..." else "")
-            
-            if endpoint_to_remove:
-                st.info(f"Silinecek: {endpoint_to_remove}")
-                
-                confirm = st.checkbox(f"'{endpoint_to_remove}' endpoint'ini silmek istediğimi onaylıyorum")
-                
-                if st.button("🗑️ Endpoint'i Sil", type="primary", disabled=not confirm):
-                    try:
-                        count = st.session_state.editor.remove_endpoint_by_name(endpoint_to_remove)
-                        if count > 0:
-                            st.success(f"✅ {count} endpoint silindi!")
-                            # Endpoint listesini yenile
-                            st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ Belirtilen isimde endpoint bulunamadı!")
-                    except Exception as e:
-                        st.error(f"❌ Hata: {e}")
+    if selected_endpoint_display == "Seçin...":
+        st.info("👆 Yukarıdan bir endpoint seçin")
+        return
+    
+    # Seçilen endpoint'in index'ini bul
+    selected_index = endpoint_names.index(selected_endpoint_display)
+    selected_endpoint = filtered_df.iloc[selected_index]
+    
+    # Collection'dan tam endpoint verisini al
+    endpoint_data = find_endpoint_in_collection(selected_endpoint['name'])
+    
+    if not endpoint_data:
+        st.error("❌ Endpoint verisi bulunamadı!")
+        return
+    
+    # Endpoint düzenleme arayüzü
+    edit_endpoint_interface(endpoint_data, selected_endpoint)
+
+def find_endpoint_in_collection(endpoint_name):
+    """Collection'da endpoint'i bul ve tam verisini döndür"""
+    def search_in_items(items, target_name):
+        for item in items:
+            if 'request' in item and item.get('name', '') == target_name:
+                return item
+            elif 'item' in item:
+                result = search_in_items(item['item'], target_name)
+                if result:
+                    return result
+        return None
+    
+    if st.session_state.get('editor') and st.session_state.editor.collection:
+        return search_in_items(st.session_state.editor.collection.get('item', []), endpoint_name)
+    return None
+
+def edit_endpoint_interface(endpoint_data, selected_endpoint):
+    """Endpoint düzenleme arayüzü"""
+    
+    st.subheader(f"🔧 {selected_endpoint['name']} Düzenleme")
+    
+    # Tablar ile kategorize edilmiş düzenleme
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📝 Genel Bilgiler",
+        "🔗 Headers", 
+        "📄 Body",
+        "📜 Scripts",
+        "⚙️ Variables"
+    ])
+    
+    # Genel Bilgiler Tab'ı
+    with tab1:
+        edit_general_info(endpoint_data)
+    
+    # Headers Tab'ı
+    with tab2:
+        edit_headers(endpoint_data)
+    
+    # Body Tab'ı  
+    with tab3:
+        edit_body(endpoint_data)
+    
+    # Scripts Tab'ı
+    with tab4:
+        edit_scripts(endpoint_data)
+    
+    # Variables Tab'ı
+    with tab5:
+        edit_variables(endpoint_data)
+    
+    # Kaydet butonu
+    st.divider()
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("💾 Değişiklikleri Kaydet", type="primary", use_container_width=True):
+            try:
+                # Endpoint listesini yenile
+                st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
+                st.success("✅ Değişiklikler kaydedildi!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Kaydetme hatası: {e}")
+
+def edit_general_info(endpoint_data):
+    """Genel bilgiler düzenleme"""
+    st.markdown("### 📝 Genel Bilgiler")
+    
+    request = endpoint_data.get('request', {})
+    
+    # Endpoint adı
+    new_name = st.text_input(
+        "Endpoint Adı:",
+        value=endpoint_data.get('name', ''),
+        key="edit_name"
+    )
+    if new_name != endpoint_data.get('name', ''):
+        endpoint_data['name'] = new_name
+    
+    # HTTP Method
+    methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
+    current_method = request.get('method', 'GET')
+    new_method = st.selectbox(
+        "HTTP Method:",
+        options=methods,
+        index=methods.index(current_method) if current_method in methods else 0,
+        key="edit_method"
+    )
+    if new_method != current_method:
+        request['method'] = new_method
+    
+    # URL
+    current_url = request.get('url', '')
+    if isinstance(current_url, dict):
+        current_url = current_url.get('raw', '')
+    
+    new_url = st.text_area(
+        "URL:",
+        value=current_url,
+        height=100,
+        key="edit_url"
+    )
+    if new_url != current_url:
+        if isinstance(request.get('url'), dict):
+            request['url']['raw'] = new_url
         else:
-            st.info("Endpoint listesi yüklenmemiş. Lütfen önce collection yükleyin.")
+            request['url'] = new_url
     
-    elif method == "HTTP Method'una Göre Sil":
-        st.subheader("🌐 HTTP Method'una Göre Silme")
-        
-        # Mevcut method'ları göster
-        if st.session_state.get('endpoints', []):
-            methods = sorted(set(ep['method'] for ep in st.session_state.endpoints))
-            selected_method = st.selectbox("HTTP Method Seçin", options=["Seçin..."] + methods)
-            
-            if selected_method != "Seçin...":
-                # Bu method'a sahip endpoint sayısını göster
-                method_count = sum(1 for ep in st.session_state.endpoints if ep['method'] == selected_method)
-                st.info(f"Bu method'a sahip {method_count} endpoint bulundu")
-                
-                confirm = st.checkbox(f"Tüm {selected_method} endpoint'lerini silmek istediğimi onaylıyorum")
-                
-                if st.button(f"🗑️ Tüm {selected_method} Endpoint'lerini Sil", type="primary", disabled=not confirm):
-                    try:
-                        count = st.session_state.editor.remove_endpoints_by_method(selected_method)
-                        st.success(f"✅ {count} adet {selected_method} endpoint'i silindi!")
-                        # Endpoint listesini yenile
-                        st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Hata: {e}")
+    # Açıklama
+    current_description = endpoint_data.get('request', {}).get('description', '')
+    new_description = st.text_area(
+        "Açıklama:",
+        value=current_description,
+        key="edit_description"
+    )
+    if new_description != current_description:
+        if 'request' not in endpoint_data:
+            endpoint_data['request'] = {}
+        endpoint_data['request']['description'] = new_description
+
+def edit_headers(endpoint_data):
+    """Headers düzenleme"""
+    st.markdown("### 🔗 Headers")
     
-    elif method == "URL Pattern'ına Göre Sil":
-        st.subheader("🔗 URL Pattern'ına Göre Silme")
+    request = endpoint_data.get('request', {})
+    headers = request.get('header', [])
+    
+    # Mevcut header'ları göster
+    if headers:
+        st.markdown("**Mevcut Headers:**")
         
-        url_pattern = st.text_input(
-            "URL Pattern",
-            help="Örn: 'localhost', 'api/v1', 'users' gibi URL'de aranacak metin"
+        headers_to_remove = []
+        for i, header in enumerate(headers):
+            if isinstance(header, dict):
+                col1, col2, col3, col4 = st.columns([3, 3, 1, 1])
+                
+                with col1:
+                    new_key = st.text_input(
+                        f"Key {i+1}:",
+                        value=header.get('key', ''),
+                        key=f"header_key_{i}"
+                    )
+                    header['key'] = new_key
+                
+                with col2:
+                    new_value = st.text_input(
+                        f"Value {i+1}:",
+                        value=header.get('value', ''),
+                        key=f"header_value_{i}"
+                    )
+                    header['value'] = new_value
+                
+                with col3:
+                    enabled = st.checkbox(
+                        "Aktif",
+                        value=not header.get('disabled', False),
+                        key=f"header_enabled_{i}"
+                    )
+                    header['disabled'] = not enabled
+                
+                with col4:
+                    if st.button("🗑️", key=f"remove_header_{i}", help="Header'ı sil"):
+                        headers_to_remove.append(i)
+        
+        # Silinecek header'ları kaldır
+        for i in reversed(headers_to_remove):
+            headers.pop(i)
+    else:
+        st.info("Header bulunamadı")
+    
+    # Yeni header ekleme
+    st.markdown("**Yeni Header Ekle:**")
+    col1, col2, col3 = st.columns([3, 3, 2])
+    
+    with col1:
+        new_header_key = st.text_input("Yeni Header Key:", key="new_header_key")
+    
+    with col2:
+        new_header_value = st.text_input("Yeni Header Value:", key="new_header_value")
+    
+    with col3:
+        if st.button("➕ Header Ekle", key="add_header"):
+            if new_header_key and new_header_value:
+                if 'header' not in request:
+                    request['header'] = []
+                
+                new_header = {
+                    "key": new_header_key,
+                    "value": new_header_value,
+                    "type": "text"
+                }
+                request['header'].append(new_header)
+                st.success(f"✅ Header eklendi: {new_header_key}")
+                st.rerun()
+
+def edit_body(endpoint_data):
+    """Body düzenleme"""
+    st.markdown("### 📄 Request Body")
+    
+    request = endpoint_data.get('request', {})
+    body = request.get('body', {})
+    
+    # Body mode seçimi
+    if body:
+        current_mode = body.get('mode', 'raw')
+    else:
+        current_mode = 'raw'
+    
+    body_modes = ['raw', 'urlencoded', 'formdata', 'binary', 'graphql']
+    new_mode = st.selectbox(
+        "Body Tipi:",
+        options=body_modes,
+        index=body_modes.index(current_mode) if current_mode in body_modes else 0,
+        key="body_mode"
+    )
+    
+    if new_mode != current_mode:
+        if 'body' not in request:
+            request['body'] = {}
+        request['body']['mode'] = new_mode
+        body = request['body']
+    
+    # Body içeriği düzenleme
+    if new_mode == 'raw':
+        # Raw body
+        current_raw = body.get('raw', '') if body else ''
+        
+        # Language seçimi
+        if body and 'options' in body and 'raw' in body['options']:
+            current_lang = body['options']['raw'].get('language', 'json')
+        else:
+            current_lang = 'json'
+        
+        languages = ['json', 'text', 'javascript', 'html', 'xml']
+        new_lang = st.selectbox(
+            "Dil:",
+            options=languages,
+            index=languages.index(current_lang) if current_lang in languages else 0,
+            key="body_language"
         )
         
-        if url_pattern:
-            # Bu pattern'a uyan endpoint'leri göster
-            if st.session_state.get('endpoints', []):
-                matching_endpoints = [ep for ep in st.session_state.endpoints if url_pattern.lower() in ep['url'].lower()]
-                
-                if matching_endpoints:
-                    st.info(f"'{url_pattern}' pattern'ına uyan {len(matching_endpoints)} endpoint bulundu:")
-                    for ep in matching_endpoints[:5]:  # İlk 5'ini göster
-                        st.markdown(f"• {ep['name']} - {ep['url']}")
-                    if len(matching_endpoints) > 5:
-                        st.markdown(f"... ve {len(matching_endpoints) - 5} endpoint daha")
-                else:
-                    st.warning("Bu pattern'a uyan endpoint bulunamadı")
-                    return
-            
-            confirm = st.checkbox(f"URL'inde '{url_pattern}' içeren tüm endpoint'leri silmek istediğimi onaylıyorum")
-            
-            if st.button("🗑️ Pattern'a Uyan Endpoint'leri Sil", type="primary", disabled=not confirm):
+        # Minimal format butonları
+        col1, col2, col3 = st.columns([8, 1, 1])
+        
+        with col2:
+            if st.button("🎨", key="format_body", help="Akıllı formatla"):
                 try:
-                    count = st.session_state.editor.remove_endpoints_by_url_pattern(url_pattern)
-                    st.success(f"✅ '{url_pattern}' pattern'ını içeren {count} endpoint silindi!")
-                    # Endpoint listesini yenile
-                    st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
+                    # Otomatik format tespiti
+                    content = current_raw.strip()
+                    if content.startswith('{') or content.startswith('['):
+                        # JSON formatla
+                        import json
+                        parsed_json = json.loads(content)
+                        formatted = json.dumps(parsed_json, indent=2, ensure_ascii=False)
+                        st.session_state['beautified_body'] = formatted
+                        st.success("✅ Formatlandı")
+                    elif content.startswith('<'):
+                        # XML formatla
+                        import xml.dom.minidom
+                        dom = xml.dom.minidom.parseString(content)
+                        formatted_xml = dom.toprettyxml(indent="  ")
+                        lines = formatted_xml.split('\n')[1:]
+                        formatted = '\n'.join([line for line in lines if line.strip()])
+                        st.session_state['beautified_body'] = formatted
+                        st.success("✅ Formatlandı")
+                    else:
+                        st.info("Format algılanamadı")
+                        return
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Hata: {e}")
-    
-    elif method == "Birden Fazla Endpoint Sil":
-        st.subheader("📝 Birden Fazla Endpoint Silme")
         
-        endpoint_names_text = st.text_area(
-            "Silinecek Endpoint İsimleri",
-            help="Her satıra bir endpoint ismi yazın veya virgülle ayırın",
-            placeholder="Endpoint1\nEndpoint2\nEndpoint3"
+        with col3:
+            if st.button("⚡", key="minify_body", help="Sıkıştır"):
+                try:
+                    content = current_raw.strip()
+                    if content.startswith('{') or content.startswith('['):
+                        # JSON minify
+                        import json
+                        parsed_json = json.loads(content)
+                        minified = json.dumps(parsed_json, separators=(',', ':'), ensure_ascii=False)
+                        st.session_state['beautified_body'] = minified
+                        st.success("✅ Sıkıştırıldı")
+                    else:
+                        # Genel minify
+                        import re
+                        minified = re.sub(r'\s+', ' ', content)
+                        st.session_state['beautified_body'] = minified
+                        st.success("✅ Sıkıştırıldı")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Hata: {e}")
+        
+        # Beautify sonucunu kullan
+        display_body = st.session_state.get('beautified_body', current_raw)
+        if st.session_state.get('beautified_body'):
+            # Beautify yapıldıysa, onu göster ve temizle
+            current_raw = st.session_state['beautified_body']
+            del st.session_state['beautified_body']
+        
+        new_raw = st.text_area(
+            "Raw Body:",
+            value=current_raw,
+            height=200,
+            key="body_raw",
+            help="💡 Yukarıdaki butonları kullanarak kodu formatlandırabilirsiniz"
         )
         
-        if endpoint_names_text:
-            # Satır veya virgülle ayrılmış isimleri parse et
-            if '\n' in endpoint_names_text:
-                endpoint_names = [name.strip() for name in endpoint_names_text.split('\n') if name.strip()]
-            else:
-                endpoint_names = [name.strip() for name in endpoint_names_text.split(',') if name.strip()]
+
+        
+        if new_raw != current_raw or new_lang != current_lang:
+            if 'body' not in request:
+                request['body'] = {}
+            request['body']['mode'] = 'raw'
+            request['body']['raw'] = new_raw
+            request['body']['options'] = {
+                'raw': {
+                    'language': new_lang
+                }
+            }
+    
+    elif new_mode == 'urlencoded':
+        # URL encoded form data
+        st.markdown("**Form Data (URL Encoded):**")
+        
+        urlencoded_data = body.get('urlencoded', []) if body else []
+        
+        # Mevcut form data'yı göster
+        data_to_remove = []
+        for i, data in enumerate(urlencoded_data):
+            col1, col2, col3, col4 = st.columns([3, 3, 1, 1])
             
-            if endpoint_names:
-                st.info(f"Silinecek {len(endpoint_names)} endpoint:")
-                for name in endpoint_names[:10]:  # İlk 10'unu göster
-                    st.markdown(f"• {name}")
-                if len(endpoint_names) > 10:
-                    st.markdown(f"... ve {len(endpoint_names) - 10} endpoint daha")
-                
-                confirm = st.checkbox(f"Bu {len(endpoint_names)} endpoint'i silmek istediğimi onaylıyorum")
-                
-                if st.button("🗑️ Seçili Endpoint'leri Sil", type="primary", disabled=not confirm):
-                    try:
-                        count = st.session_state.editor.remove_multiple_endpoints(endpoint_names)
-                        st.success(f"✅ Toplam {count} endpoint silindi!")
-                        # Endpoint listesini yenile
-                        st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Hata: {e}")
+            with col1:
+                new_key = st.text_input(
+                    f"Key {i+1}:",
+                    value=data.get('key', ''),
+                    key=f"form_key_{i}"
+                )
+                data['key'] = new_key
+            
+            with col2:
+                new_value = st.text_input(
+                    f"Value {i+1}:",
+                    value=data.get('value', ''),
+                    key=f"form_value_{i}"
+                )
+                data['value'] = new_value
+            
+            with col3:
+                enabled = st.checkbox(
+                    "Aktif",
+                    value=not data.get('disabled', False),
+                    key=f"form_enabled_{i}"
+                )
+                data['disabled'] = not enabled
+            
+            with col4:
+                if st.button("🗑️", key=f"remove_form_{i}", help="Alanı sil"):
+                    data_to_remove.append(i)
+        
+        # Silinecek alanları kaldır
+        for i in reversed(data_to_remove):
+            urlencoded_data.pop(i)
+        
+        # Yeni alan ekleme
+        st.markdown("**Yeni Alan Ekle:**")
+        col1, col2, col3 = st.columns([3, 3, 2])
+        
+        with col1:
+            new_form_key = st.text_input("Yeni Key:", key="new_form_key")
+        
+        with col2:
+            new_form_value = st.text_input("Yeni Value:", key="new_form_value")
+        
+        with col3:
+            if st.button("➕ Alan Ekle", key="add_form_field"):
+                if new_form_key:
+                    if 'body' not in request:
+                        request['body'] = {}
+                    if 'urlencoded' not in request['body']:
+                        request['body']['urlencoded'] = []
+                    
+                    new_field = {
+                        "key": new_form_key,
+                        "value": new_form_value,
+                        "type": "text"
+                    }
+                    request['body']['urlencoded'].append(new_field)
+                    st.success(f"✅ Alan eklendi: {new_form_key}")
+                    st.rerun()
+
+def edit_scripts(endpoint_data):
+    """Scripts düzenleme"""
+    st.markdown("### 📜 Scripts")
+    
+    request = endpoint_data.get('request', {})
+    
+    # Pre-request Script
+    st.markdown("**Pre-request Script:**")
+    prerequest = request.get('prerequest', {})
+    
+    if isinstance(prerequest, dict):
+        current_prereq = '\n'.join(prerequest.get('exec', [])) if prerequest.get('exec') else ''
+    else:
+        current_prereq = str(prerequest) if prerequest else ''
+    
+    new_prereq = st.text_area(
+        "Pre-request Script:",
+        value=current_prereq,
+        height=150,
+        key="prerequest_script",
+        help="JavaScript kodu yazın"
+    )
+    
+    if new_prereq != current_prereq:
+        if new_prereq.strip():
+            request['prerequest'] = {
+                'exec': new_prereq.split('\n'),
+                'type': 'text/javascript'
+            }
+        else:
+            request['prerequest'] = {'exec': [], 'type': 'text/javascript'}
+    
+    # Test Script
+    st.markdown("**Test Script:**")
+    
+    # Event'larda test script'i ara
+    events = request.get('event', [])
+    test_event = None
+    for event in events:
+        if event.get('listen') == 'test':
+            test_event = event
+            break
+    
+    if test_event and test_event.get('script', {}).get('exec'):
+        current_test = '\n'.join(test_event['script']['exec'])
+    else:
+        current_test = ''
+    
+    new_test = st.text_area(
+        "Test Script:",
+        value=current_test,
+        height=150,
+        key="test_script",
+        help="Test JavaScript kodu yazın"
+    )
+    
+    if new_test != current_test:
+        if 'event' not in request:
+            request['event'] = []
+        
+        # Mevcut test event'ini kaldır
+        request['event'] = [e for e in request['event'] if e.get('listen') != 'test']
+        
+        # Yeni test event'i ekle
+        if new_test.strip():
+            test_event = {
+                'listen': 'test',
+                'script': {
+                    'exec': new_test.split('\n'),
+                    'type': 'text/javascript'
+                }
+            }
+            request['event'].append(test_event)
+
+def edit_variables(endpoint_data):
+    """Variables düzenleme"""
+    st.markdown("### ⚙️ Variables")
+    
+    # Endpoint seviyesinde variable yok, collection seviyesinde var
+    st.info("💡 Variables collection seviyesinde tanımlanır. Endpoint'e özel variable yoktur.")
+    
+    # Collection variables'ı göster
+    if st.session_state.get('editor') and st.session_state.editor.collection:
+        collection_vars = st.session_state.editor.collection.get('variable', [])
+        
+        if collection_vars:
+            st.markdown("**Collection Variables:**")
+            for var in collection_vars:
+                st.code(f"{var.get('key', 'unknown')} = {var.get('value', '')}")
+        else:
+            st.info("Collection'da tanımlı variable bulunamadı")
+    
+    # URL'de kullanılan variable'ları tespit et
+    request = endpoint_data.get('request', {})
+    url = request.get('url', '')
+    if isinstance(url, dict):
+        url = url.get('raw', '')
+    
+    import re
+    variables_in_url = re.findall(r'\{\{([^}]+)\}\}', str(url))
+    
+    if variables_in_url:
+        st.markdown("**Bu Endpoint'te Kullanılan Variables:**")
+        for var in set(variables_in_url):
+            st.markdown(f"• `{{{{{var}}}}}`")
+    else:
+        st.info("Bu endpoint'te variable kullanımı bulunamadı")
 
 def har_converter_sidebar():
     """Sidebar'daki HAR converter"""
@@ -625,32 +976,6 @@ def har_converter_sidebar():
 def har_converter():
     """Ana alandaki HAR converter (artık kullanılmıyor)"""
     st.info("📥 HAR Converter artık sol taraftaki sidebar'da bulunuyor!")
-
-def script_list():
-    """Script listesi sekmesi"""
-    st.header("🔍 Script Listesi")
-    st.markdown("Collection'daki tüm script'leri görüntüleyin")
-    
-    if st.button("🔄 Scriptleri Tara"):
-        if st.session_state.get('editor'):
-            with st.spinner("Scriptler taranıyor..."):
-                scripts = st.session_state.editor.list_scripts_in_collection()
-                st.session_state.scripts = scripts
-                st.rerun()
-    
-    if st.session_state.get('scripts', []):
-        st.success(f"📊 Toplam {len(st.session_state.scripts)} request'te script bulundu")
-        
-        # Script'leri göster
-        for i, item in enumerate(st.session_state.scripts, 1):
-            with st.expander(f"📝 {i}. {item['name']}", expanded=False):
-                for script in item['scripts']:
-                    st.markdown(f"• **{script}**")
-    else:
-        if st.session_state.get('scripts') is not None:
-            st.success("✅ Hiçbir request'te script bulunamadı!")
-        else:
-            st.info("👆 Scriptleri taramak için yukarıdaki butona tıklayın")
 
 # Ana sayfa alt kısmında indirme butonu
 if st.session_state.get('collection_loaded', False):

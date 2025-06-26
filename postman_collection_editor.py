@@ -203,67 +203,6 @@ class PostmanCollectionEditor:
         print(f"🎉 Toplam {count} request'ten scriptler kaldırıldı!")
         return count
     
-    def list_scripts_in_collection(self):
-        """Collection'daki tüm scriptleri listeler"""
-        scripts_found = []
-        
-        def find_scripts(item):
-            item_name = item.get('name', 'Unnamed')
-            item_scripts = []
-            
-            # Request seviyesindeki scriptleri kontrol et
-            if 'request' in item:
-                request = item['request']
-                
-                # Pre-request script
-                if 'prerequest' in request:
-                    if isinstance(request['prerequest'], dict) and request['prerequest'].get('exec'):
-                        exec_lines = request['prerequest']['exec']
-                        if exec_lines and any(line.strip() for line in exec_lines):
-                            item_scripts.append(f"Pre-request ({len(exec_lines)} satır)")
-                    elif isinstance(request['prerequest'], str) and request['prerequest'].strip():
-                        item_scripts.append("Pre-request (string)")
-                
-                # Request seviyesindeki event'lar
-                if 'event' in request and request['event']:
-                    for event in request['event']:
-                        listen_type = event.get('listen', 'unknown')
-                        if event.get('script', {}).get('exec'):
-                            exec_lines = event['script']['exec']
-                            if exec_lines and any(line.strip() for line in exec_lines):
-                                item_scripts.append(f"{listen_type.title()} ({len(exec_lines)} satır)")
-            
-            # Item seviyesindeki event'lar
-            if 'event' in item and item['event']:
-                for event in item['event']:
-                    listen_type = event.get('listen', 'unknown')
-                    if event.get('script', {}).get('exec'):
-                        exec_lines = event['script']['exec']
-                        if exec_lines and any(line.strip() for line in exec_lines):
-                            item_scripts.append(f"Item-level {listen_type.title()} ({len(exec_lines)} satır)")
-            
-            if item_scripts:
-                scripts_found.append({
-                    'name': item_name,
-                    'scripts': item_scripts
-                })
-        
-        self._process_items_recursive(self.collection.get('item', []), find_scripts)
-        
-        print(f"\n🔍 Collection'da Script Bulunan Request'ler:")
-        print("-" * 60)
-        
-        if scripts_found:
-            for i, item in enumerate(scripts_found, 1):
-                print(f"{i:3d}. {item['name']}")
-                for script in item['scripts']:
-                    print(f"      • {script}")
-                print()
-            print(f"📊 Toplam: {len(scripts_found)} request'te script bulundu")
-        else:
-            print("✅ Hiçbir request'te script bulunamadı!")
-        
-        return scripts_found
     
     def remove_endpoint_by_name(self, endpoint_name: str):
         """Belirtilen isme sahip endpoint'i kaldırır"""
@@ -317,36 +256,7 @@ class PostmanCollectionEditor:
         print(f"🎉 Toplam {removed_count} adet {method} endpoint'i kaldırıldı!")
         return removed_count
     
-    def remove_endpoints_by_url_pattern(self, url_pattern: str):
-        """URL'inde belirtilen pattern'i içeren endpoint'leri kaldırır"""
-        removed_count = 0
-        
-        def remove_from_items(items):
-            nonlocal removed_count
-            items_to_remove = []
-            
-            for i, item in enumerate(items):
-                if 'request' in item:
-                    request = item['request']
-                    url = request.get('url', '')
-                    if isinstance(url, dict):
-                        url = url.get('raw', '')
-                    
-                    if url_pattern.lower() in url.lower():
-                        items_to_remove.append(i)
-                        print(f"✅ URL pattern eşleşti, kaldırıldı: {item.get('name', 'Unnamed')} - {url}")
-                        removed_count += 1
-                elif 'item' in item:
-                    # Folder içindeki itemleri kontrol et
-                    remove_from_items(item['item'])
-            
-            # Geriye doğru sil (index'ler değişmesin)
-            for i in reversed(items_to_remove):
-                items.pop(i)
-        
-        remove_from_items(self.collection.get('item', []))
-        print(f"🎉 '{url_pattern}' pattern'ını içeren {removed_count} endpoint kaldırıldı!")
-        return removed_count
+
     
     def remove_multiple_endpoints(self, endpoint_names: list):
         """Birden fazla endpoint'i isimlerine göre kaldırır"""
@@ -419,44 +329,7 @@ class PostmanCollectionEditor:
         print(f"   Toplam Request Sayısı: {request_count}")
         print(f"   Dosya Boyutu: {os.path.getsize(self.collection_path) / 1024 / 1024:.2f} MB")
     
-    def update_base_url(self, old_url: str, new_url: str):
-        """
-        Tüm requestlerde base URL'i günceller
-        
-        Args:
-            old_url (str): Eski base URL
-            new_url (str): Yeni base URL
-        """
-        count = 0
-        
-        def update_url(item):
-            nonlocal count
-            if 'request' not in item:
-                return
-                
-            request = item['request']
-            if 'url' not in request:
-                return
-            
-            url = request['url']
-            if isinstance(url, str):
-                if url.startswith(old_url):
-                    request['url'] = url.replace(old_url, new_url, 1)
-                    print(f"✅ URL güncellendi: {item.get('name', 'Unnamed')}")
-                    count += 1
-            elif isinstance(url, dict) and 'raw' in url:
-                if url['raw'].startswith(old_url):
-                    url['raw'] = url['raw'].replace(old_url, new_url, 1)
-                    # Host bilgisini de güncelle
-                    if 'host' in url:
-                        new_host = new_url.replace('https://', '').replace('http://', '').split('/')[0]
-                        url['host'] = new_host.split('.')
-                    print(f"✅ URL güncellendi: {item.get('name', 'Unnamed')}")
-                    count += 1
-        
-        self._process_items_recursive(self.collection.get('item', []), update_url)
-        print(f"🎉 Toplam {count} request'te URL güncellendi: {old_url} -> {new_url}")
-        return count
+
     
     def add_environment_variable(self, var_name: str, var_value: str):
         """Collection seviyesinde environment variable ekler"""
@@ -760,20 +633,18 @@ def interactive_menu():
         print("İşlem seçiniz:")
         print("1. Collection bilgilerini göster")
         print("2. Tüm endpoint'leri listele")
-        print("3. Scriptleri listele")
-        print("4. Tüm requestlere header ekle")
-        print("5. Tüm requestlerden header kaldır")
-        print("6. Tüm scriptleri kaldır")
-        print("7. Base URL güncelle")
-        print("8. Environment variable ekle")
-        print("9. Metin değiştir (URL/Body/Header)")
-        print("10. Endpoint silme işlemleri")
-        print("11. HAR dosyasından collection oluştur")
-        print("12. Yedek oluştur")
-        print("13. Collection'ı kaydet")
+        print("3. Tüm requestlere header ekle")
+        print("4. Tüm requestlerden header kaldır")
+        print("5. Tüm scriptleri kaldır")
+        print("6. Environment variable ekle")
+        print("7. Metin değiştir (URL/Body/Header)")
+        print("8. Endpoint silme işlemleri")
+        print("9. HAR dosyasından collection oluştur")
+        print("10. Yedek oluştur")
+        print("11. Collection'ı kaydet")
         print("0. Çıkış")
         
-        choice = input("\nSeçiminiz (0-13): ").strip()
+        choice = input("\nSeçiminiz (0-11): ").strip()
         
         if choice == "0":
             print("👋 Görüşürüz!")
@@ -783,58 +654,48 @@ def interactive_menu():
         elif choice == "2":
             editor.list_all_endpoints()
         elif choice == "3":
-            editor.list_scripts_in_collection()
-        elif choice == "4":
             header_name = input("Header adı: ").strip()
             header_value = input("Header değeri: ").strip()
             if header_name and header_value:
                 editor.add_header_to_all_requests(header_name, header_value)
             else:
                 print("❌ Header adı ve değeri boş olamaz!")
-        elif choice == "5":
+        elif choice == "4":
             header_name = input("Kaldırılacak header adı: ").strip()
             if header_name:
                 editor.remove_header_from_all_requests(header_name)
             else:
                 print("❌ Header adı boş olamaz!")
-        elif choice == "6":
+        elif choice == "5":
             confirm = input("Tüm scriptleri kaldırmak istediğinizden emin misiniz? (e/h): ").strip().lower()
             if confirm == 'e':
                 editor.remove_all_scripts()
-        elif choice == "7":
-            old_url = input("Eski base URL: ").strip()
-            new_url = input("Yeni base URL: ").strip()
-            if old_url and new_url:
-                editor.update_base_url(old_url, new_url)
-            else:
-                print("❌ URL'ler boş olamaz!")
-        elif choice == "8":
+        elif choice == "6":
             var_name = input("Variable adı: ").strip()
             var_value = input("Variable değeri: ").strip()
             if var_name and var_value:
                 editor.add_environment_variable(var_name, var_value)
             else:
                 print("❌ Variable adı ve değeri boş olamaz!")
-        elif choice == "9":
+        elif choice == "7":
             old_text = input("Değiştirilecek metin: ").strip()
             new_text = input("Yeni metin: ").strip()
             if old_text and new_text:
                 editor.replace_text_in_requests(old_text, new_text)
             else:
                 print("❌ Metinler boş olamaz!")
-        elif choice == "10":
+        elif choice == "8":
             # Endpoint silme alt menüsü
             while True:
                 print("\n" + "-"*30)
                 print("Endpoint Silme İşlemleri:")
                 print("1. İsme göre endpoint sil")
                 print("2. HTTP method'una göre endpoint sil")
-                print("3. URL pattern'ına göre endpoint sil")
-                print("4. Birden fazla endpoint sil")
-                print("5. Endpoint listesini görüntüle")
+                print("3. Birden fazla endpoint sil")
+                print("4. Endpoint listesini görüntüle")
                 print("0. Ana menüye dön")
                 
-                sub_choice = input("\nSeçiminiz (0-5): ").strip()
+                sub_choice = input("\nSeçiminiz (0-4): ").strip()
                 
                 if sub_choice == "0":
                     break
@@ -855,14 +716,6 @@ def interactive_menu():
                     else:
                         print("❌ HTTP method boş olamaz!")
                 elif sub_choice == "3":
-                    url_pattern = input("URL'de aranacak pattern: ").strip()
-                    if url_pattern:
-                        confirm = input(f"URL'inde '{url_pattern}' içeren tüm endpoint'leri silmek istediğinizden emin misiniz? (e/h): ").strip().lower()
-                        if confirm == 'e':
-                            editor.remove_endpoints_by_url_pattern(url_pattern)
-                    else:
-                        print("❌ URL pattern boş olamaz!")
-                elif sub_choice == "4":
                     print("Silinecek endpoint isimlerini virgülle ayırarak girin:")
                     endpoints_str = input("Örnek: Endpoint1, Endpoint2, Endpoint3: ").strip()
                     if endpoints_str:
@@ -874,11 +727,11 @@ def interactive_menu():
                                 editor.remove_multiple_endpoints(endpoint_names)
                     else:
                         print("❌ Endpoint isimleri boş olamaz!")
-                elif sub_choice == "5":
+                elif sub_choice == "4":
                     editor.list_all_endpoints()
                 else:
                     print("❌ Geçersiz seçim!")
-        elif choice == "11":
+        elif choice == "9":
             # HAR converter
             har_file = input("HAR dosyasının yolu: ").strip()
             if not har_file:
@@ -903,9 +756,9 @@ def interactive_menu():
                 print("✅ HAR dosyası başarıyla Postman collection'ına çevrildi!")
             else:
                 print("❌ HAR dosyası çevrilirken hata oluştu!")
-        elif choice == "12":
+        elif choice == "10":
             editor.create_backup()
-        elif choice == "13":
+        elif choice == "11":
             output_file = input("Çıktı dosyası adı (boş bırakırsanız orijinal dosya güncellenir): ").strip()
             editor.save_collection(output_file if output_file else None)
         else:
