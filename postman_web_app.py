@@ -304,38 +304,38 @@ def endpoint_list():
             st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
             st.rerun()
     
-    if not st.session_state.get('endpoints', []):
-        st.info("Endpoint bulunamadı")
-        return
+        if not st.session_state.get('endpoints', []):
+            st.info("Endpoint bulunamadı")
+            return
+
+    # DataFrame oluştur
+    import pandas as pd
+    df = pd.DataFrame(st.session_state.endpoints)
     
-        # DataFrame oluştur
-        import pandas as pd
-        df = pd.DataFrame(st.session_state.endpoints)
-        
-        # Filtreleme
-        col1, col2 = st.columns(2)
-        with col1:
-            method_filter = st.selectbox(
-                "Method Filtresi",
-                options=["Tümü"] + sorted(df['method'].unique().tolist())
-            )
-        
-        with col2:
-            search_term = st.text_input("Endpoint Ara", placeholder="Endpoint adı veya URL'de ara")
-        
-        # Filtreleme uygula
-        filtered_df = df.copy()
-        
-        if method_filter != "Tümü":
-            filtered_df = filtered_df[filtered_df['method'] == method_filter]
-        
-        if search_term:
-            mask = filtered_df['name'].str.contains(search_term, case=False, na=False) | \
-                   filtered_df['url'].str.contains(search_term, case=False, na=False)
-            filtered_df = filtered_df[mask]
-        
-        st.markdown(f"**Toplam: {len(filtered_df)} endpoint**")
-        
+    # Filtreleme
+    col1, col2 = st.columns(2)
+    with col1:
+        method_filter = st.selectbox(
+            "Method Filtresi",
+            options=["Tümü"] + sorted(df['method'].unique().tolist())
+        )
+    
+    with col2:
+        search_term = st.text_input("Endpoint Ara", placeholder="Endpoint adı veya URL'de ara")
+    
+    # Filtreleme uygula
+    filtered_df = df.copy()
+    
+    if method_filter != "Tümü":
+        filtered_df = filtered_df[filtered_df['method'] == method_filter]
+    
+    if search_term:
+        mask = filtered_df['name'].str.contains(search_term, case=False, na=False) | \
+               filtered_df['url'].str.contains(search_term, case=False, na=False)
+        filtered_df = filtered_df[mask]
+    
+    st.markdown(f"**Toplam: {len(filtered_df)} endpoint**")
+    
     if view_mode == "📋 Liste Görünümü":
         # Basit tablo görünümü
         st.dataframe(
@@ -435,11 +435,11 @@ def edit_endpoint_interface(endpoint_data, selected_endpoint):
     with col2:
         if st.button("💾 Değişiklikleri Kaydet", type="primary", use_container_width=True):
             try:
-                            # Endpoint listesini yenile
-                            st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
+                # Endpoint listesini yenile
+                st.session_state.endpoints = st.session_state.editor.list_all_endpoints()
                 st.success("✅ Değişiklikler kaydedildi!")
-                            st.rerun()
-                    except Exception as e:
+                st.rerun()
+            except Exception as e:
                 st.error(f"❌ Kaydetme hatası: {e}")
 
 def edit_general_info(endpoint_data):
@@ -571,7 +571,7 @@ def edit_headers(endpoint_data):
                 }
                 request['header'].append(new_header)
                 st.success(f"✅ Header eklendi: {new_header_key}")
-                        st.rerun()
+                st.rerun()
 
 def edit_body(endpoint_data):
     """Body düzenleme"""
@@ -643,9 +643,8 @@ def edit_body(endpoint_data):
                         formatted = '\n'.join([line for line in lines if line.strip()])
                         st.session_state['beautified_body'] = formatted
                         st.success("✅ Formatlandı")
-                else:
+                    else:
                         st.info("Format algılanamadı")
-                    return
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Hata: {e}")
@@ -685,8 +684,6 @@ def edit_body(endpoint_data):
             key="body_raw",
             help="💡 Yukarıdaki butonları kullanarak kodu formatlandırabilirsiniz"
         )
-        
-
         
         if new_raw != current_raw or new_lang != current_lang:
             if 'body' not in request:
@@ -767,7 +764,7 @@ def edit_body(endpoint_data):
                     }
                     request['body']['urlencoded'].append(new_field)
                     st.success(f"✅ Alan eklendi: {new_form_key}")
-                        st.rerun()
+                    st.rerun()
 
 def edit_scripts(endpoint_data):
     """Scripts düzenleme"""
